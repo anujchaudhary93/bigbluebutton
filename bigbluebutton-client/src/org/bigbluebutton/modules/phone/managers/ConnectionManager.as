@@ -19,23 +19,23 @@
 
 package org.bigbluebutton.modules.phone.managers {	
 	import com.asfusion.mate.events.Dispatcher;
-	
 	import flash.events.AsyncErrorEvent;
 	import flash.events.NetStatusEvent;
 	import flash.events.SecurityErrorEvent;
 	import flash.net.NetConnection;
 	import flash.net.NetStream;
 	import flash.net.ObjectEncoding;
-	
 	import org.as3commons.logging.api.ILogger;
 	import org.as3commons.logging.api.getClassLogger;
 	import org.bigbluebutton.core.BBB;
 	import org.bigbluebutton.core.UsersUtil;
 	import org.bigbluebutton.core.managers.ReconnectionManager;
+	import org.bigbluebutton.core.model.LiveMeeting;
 	import org.bigbluebutton.main.events.BBBEvent;
 	import org.bigbluebutton.modules.phone.events.FlashCallConnectedEvent;
 	import org.bigbluebutton.modules.phone.events.FlashCallDisconnectedEvent;
 	import org.bigbluebutton.modules.phone.events.FlashVoiceConnectionStatusEvent;
+	import org.bigbluebutton.util.ConnUtil;
 	
 	public class ConnectionManager {
 		private static const LOGGER:ILogger = getClassLogger(ConnectionManager);
@@ -86,18 +86,43 @@ package org.bigbluebutton.modules.phone.managers {
 		public function connect():void {				
 			if (!reconnecting || amIListenOnly) {
 				closedByUser = false;
-				var isTunnelling:Boolean = BBB.initConnectionManager().isTunnelling;
-				if (isTunnelling) {
-					uri = uri.replace(/rtmp:/gi, "rtmpt:");
-				}
-				LOGGER.debug("Connecting to uri=[{0}]", [uri]);
+				
+				var pattern:RegExp = /(?P<protocol>.+):\/\/(?P<server>.+)\/(?P<app>.+)/;
+				var result:Array = pattern.exec(uri);
+				var useRTMPS: Boolean = result.protocol == ConnUtil.RTMPS
+					
 				netConnection = new NetConnection();
-				netConnection.proxyType = "best";
+				
+				if (BBB.initConnectionManager().isTunnelling) {
+					var tunnelProtocol: String = ConnUtil.RTMPT;
+					
+					if (useRTMPS) {
+						netConnection.proxyType = ConnUtil.PROXY_NONE;
+						tunnelProtocol = ConnUtil.RTMPS;
+					}
+						
+					uri = tunnelProtocol + "://" + result.server + "/" + result.app;
+					LOGGER.debug("BBB SIP CONNECT tunnel = TRUE " + "url=" +  uri);
+				} else {
+					var nativeProtocol: String = ConnUtil.RTMP;
+					if (useRTMPS) {
+						netConnection.proxyType = ConnUtil.PROXY_BEST;
+						nativeProtocol = ConnUtil.RTMPS;
+					}
+					
+					uri = nativeProtocol + "://" + result.server + "/" + result.app;
+					LOGGER.debug("BBB SIP CONNECT tunnel = FALSE " + "url=" +  uri);
+				}
+				
+				LOGGER.debug("VOICE CONF == Connecting to uri=[{0}]", [uri]);
+				
 				netConnection.objectEncoding = ObjectEncoding.AMF3;
 				netConnection.client = this;
 				netConnection.addEventListener( NetStatusEvent.NET_STATUS , netStatus );
 				netConnection.addEventListener(SecurityErrorEvent.SECURITY_ERROR, securityErrorHandler);
-				netConnection.connect(uri, meetingId, externUserId, username);
+				
+				var authToken: String = LiveMeeting.inst().me.authToken;
+				netConnection.connect(uri, meetingId, externUserId, username, authToken);
 			}
 			if (reconnecting && !amIListenOnly) {
 				handleConnectionSuccess();
@@ -166,7 +191,7 @@ package org.bigbluebutton.modules.phone.managers {
           break;
         case "NetConnection.Connect.NetworkChange":
           numNetworkChangeCount++;
-          if (numNetworkChangeCount % 20 == 0) {
+          if (numNetworkChangeCount % 2 == 0) {
               logData.tags = ["voice", "flash"];
              logData.message = "Detected network change on bbb-voice";
              logData.numNetworkChangeCount = numNetworkChangeCount;

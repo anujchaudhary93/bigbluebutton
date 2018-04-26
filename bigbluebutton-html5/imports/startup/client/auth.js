@@ -18,7 +18,9 @@ export function joinRouteHandler(nextState, replace, callback) {
   fetch(url)
     .then(response => response.json())
     .then((data) => {
-      const { meetingID, internalUserID, authToken, logoutUrl } = data.response;
+      const {
+        meetingID, internalUserID, authToken, logoutUrl,
+      } = data.response;
 
       Auth.set(meetingID, internalUserID, authToken, logoutUrl, sessionToken);
       replace({ pathname: '/' });
@@ -35,9 +37,6 @@ export function logoutRouteHandler(nextState, replace) {
         protocolPattern.test(logoutURL) ?
           logoutURL :
           `http://${logoutURL}`;
-    })
-    .catch(() => {
-      replace({ pathname: '/error/500' });
     });
 }
 

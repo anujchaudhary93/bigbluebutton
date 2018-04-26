@@ -60,6 +60,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 		<mate:Listener type="{ShortcutEvent.OPEN_SHORTCUT_WIN}" method="openShortcutHelpWindow" />
 		<mate:Listener type="{BBBEvent.OPEN_WEBCAM_PREVIEW}" method="openVideoPreviewWindow" />
 		<mate:Listener type="{BBBEvent.INACTIVITY_WARNING_EVENT}" method="handleInactivityWarningEvent" />
+		<mate:Listener type="{BBBEvent.USER_INACTIVITY_AUDIT_EVENT}" method="handleUserInactivityAuditEvent" />
 		<mate:Listener type="{LockControlEvent.OPEN_LOCK_SETTINGS}" method="openLockSettingsWindow" />
 		<mate:Listener type="{BreakoutRoomEvent.OPEN_BREAKOUT_ROOMS_PANEL}" method="openBreakoutRoomsWindow" />
 		
@@ -131,7 +132,6 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 			import org.bigbluebutton.main.model.options.LanguageOptions;
 			import org.bigbluebutton.main.model.options.LayoutOptions;
 			import org.bigbluebutton.main.model.users.events.ConferenceCreatedEvent;
-			import org.bigbluebutton.main.model.users.events.ConnectionFailedEvent;
 			import org.bigbluebutton.modules.phone.events.AudioSelectionWindowEvent;
 			import org.bigbluebutton.modules.phone.events.FlashMicSettingsEvent;
 			import org.bigbluebutton.modules.phone.events.WebRTCCallEvent;
@@ -171,7 +171,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 			
 			[Bindable] private var showToolbarOpt:Boolean = true;
 			[Bindable] private var _showToolbar:Boolean = true;
-			private const DEFAULT_TOOLBAR_HEIGHT:Number = 50;
+			public static const DEFAULT_TOOLBAR_HEIGHT:Number = 50;
 			[Bindable] private var toolbarHeight:Number = DEFAULT_TOOLBAR_HEIGHT;
 			[Bindable] private var showFooterOpt:Boolean = true;
 			[Bindable] private var _showFooter:Boolean = true;
@@ -496,6 +496,12 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 	   			mdiCanvas.addChild(e.component);
 	   		}
 	   		
+			private function handleUserInactivityAuditEvent(e:BBBEvent):void {
+				var inactivityWarning:UserInactivityAuditWindow = PopUpUtil.createModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, 
+					UserInactivityAuditWindow, true) as UserInactivityAuditWindow;
+				inactivityWarning.duration = e.payload.duration;
+			}
+			
 			private function handleInactivityWarningEvent(e:BBBEvent):void {
 				var inactivityWarning:InactivityWarningWindow = PopUpUtil.createModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, InactivityWarningWindow, true) as InactivityWarningWindow;
 				inactivityWarning.duration = e.payload.duration;
@@ -548,7 +554,11 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
                     }
                 } else if (BrowserCheck.isChrome()) {
                     if (browserPermissionHelper) {
-						browserPermissionHelper.currentState = "chromeMic";
+						if (Capabilities.os.indexOf("Mac") >= 0){
+							browserPermissionHelper.currentState = "chromeMicMacOSX";
+						} else {
+							browserPermissionHelper.currentState = "chromeMic";
+						}
 						browserPermissionHelper.x = 50;
 						browserPermissionHelper.y = 130;
                     }
@@ -569,7 +579,11 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 			private function showbrowserPermissionHelper() : void {
 				var browserPermissionHelper : BrowserPermissionHelper = PopUpUtil.createNonModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, BrowserPermissionHelper, false) as BrowserPermissionHelper;
 				if (browserPermissionHelper) {
-					browserPermissionHelper.currentState = "chromeCam";
+					if (Capabilities.os.indexOf("Mac") >= 0){
+						browserPermissionHelper.currentState = "chromeCamMacOSX";
+					} else {
+						browserPermissionHelper.currentState = "chromeCam";
+					}
 					browserPermissionHelper.x = 20;
 					browserPermissionHelper.y = 150;
 				}
@@ -623,7 +637,10 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 
 			private function updateToolbarHeight():void {
 				if (toolbarHeight != 0) {
-					toolbarHeight = Math.max(DEFAULT_TOOLBAR_HEIGHT, toolbar.logo.height + toolbar.quickLinks.includeInLayout ? toolbar.quickLinks.height : 0);
+					toolbarHeight = DEFAULT_TOOLBAR_HEIGHT;
+					if (toolbar.quickLinks.includeInLayout) {
+						toolbarHeight += toolbar.quickLinks.height;
+					}
 					if (UsersUtil.isBreakout()) {
 						toolbarHeight += toolbar.breakoutRibbon.height;
 					}
@@ -677,6 +694,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
                     var ls:LockSettings = LockSettings(popUp);
                     ls.disableCam = lsv.getDisableCam();
                     ls.disableMic = lsv.getDisableMic();
+					ls.webcamsOnlyForModerator = LiveMeeting.inst().meeting.webcamsOnlyForModerator;
                     ls.disablePrivChat = lsv.getDisablePrivateChat();
                     ls.disablePubChat = lsv.getDisablePublicChat();
                     ls.lockedLayout = lsv.getLockedLayout();
@@ -747,7 +765,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 		<mx:Canvas id="backgroundPlaceHolder" width="100%" height="100%" />
 		<mx:VBox horizontalCenter="0" verticalCenter="0" horizontalAlign="center" verticalGap="20">
 			<views:QuotesView id="quoteView"/>
-			<views:LoadingBar id="progressBar" width="280" height="15" labelWidth="280" textAlign="center"/>
+			<views:LoadingBar id="progressBar"/>
 		</mx:VBox>
 	</views:MainCanvas>	
 	
